@@ -16,6 +16,7 @@
     var self = this;
 
     this.screens = options.screens;
+    this.screensPositions = options.screensPositions;
     this.screensOrder = options.screensOrder;
     this.currentScreenIndex = 0;
     this.curTop = 0;
@@ -23,34 +24,71 @@
     this.minimal = true;
     this.setScrollTop = options.setScrollTop;
     this.transformToolManager = options.transformToolManager;
+    this.keyScrollEnabled = true;
+    this.ctrlKey = false;
+
+    this.selectTarget = function(e) {
+        if (!self.ctrlKey) {
+          self.transformToolManager.selectTarget(e.currentTarget);
+          self.refreshStats();
+        } else {
+          $(e.currentTarget).unbind("click", self.selectTarget);
+          e.currentTarget.style['pointer-events'] = "none";
+          self.transformToolManager.deselectTarget();   
+        }
+      }
+
+    this.transformToolManager.updateFn = function() {
+      self.refreshStats();
+    }
 
     $(window).keydown(function(e){
+
+      if(e.ctrlKey)
+        self.ctrlKey = true;
+
       if(e.ctrlKey && e.keyCode == 13)
         self.toggle();
+
+      if(e.ctrlKey && e.altKey && e.keyCode == 82)
+        self.toggleResize();
+
+      if(e.ctrlKey && e.shiftKey && e.keyCode == 77)
+        self.keyScrollEnabled = !self.keyScrollEnabled;
+
+      if (!self.keyScrollEnabled && (e.keyCode == 38 || e.keyCode == 40))
+      {
+        e.preventDefault();
+        return false;
+      }
+    });
+
+    $(window).keyup(function(e){
+      if(e.keyCode == 17)
+        self.ctrlKey = false;
     });
   },
   updateCurrentScreenIndex: function(index){
     this.currentScreenIndex = index;
-    var self = this;
-    var screenName = self.screensOrder[self.currentScreenIndex];
-    var curOffset = self.curTop-self.screens[self.screensOrder[self.currentScreenIndex]];
-    var data = "data-_"+screenName+"-"+curOffset+"=";
-    self.$(".data").html(data);
+    this.refreshStats();
   },
   updateCurTop: function(data){
     this.curTop = data;
+    this.refreshStats();
+
+    if (this.transformToolManager.target)
+    {
+      this.transformToolManager.readTransformData();
+      this.transformToolManager.updateTransform();
+    }
   },
   changeCurrentScreenIndex: function(e){
     this.currentScreenIndex = $(".screensSelection option:selected").val();
-    var self = this;
-    var screenName = self.screensOrder[self.currentScreenIndex];
-    var curOffset = self.curTop-self.screens[self.screensOrder[self.currentScreenIndex]];
-    var data = "data-_"+screenName+"-"+curOffset+"=";
-    self.$(".data").html(data);
+    this.refreshStats();
   },
   scrollTo : function(e)
   {
-    var offset = this.screens[this.screensOrder[this.currentScreenIndex]];
+    var offset = this.screensPositions[this.screensOrder[this.currentScreenIndex]];
 
     this.setScrollTop(offset);
   },
@@ -67,33 +105,35 @@
   toggleResize : function(e){
     var self = this;
 
-    e.preventDefault();
+    if (e)
+      e.preventDefault();
+
     if(!this.resizable) {
       this.resizable = true;
-      $(".skrollable").mousedown(function(e) {
-        console.log(e.currentTarget);
-        self.transformToolManager.selectTarget(e.currentTarget);
-      });
+
+      $(".skrollable").css('pointer-events', "");
+      $(".skrollable").bind("click", this.selectTarget);
     } else {
       this.resizable = false;
-      $(".skrollable").mousedown(function(e) {});
+      $(".skrollable").unbind("click", this.selectTarget);
       self.transformToolManager.deselectTarget();
-      this.refreshStats();
     }
   },
   refreshStats : function()
   {
     var self = this;
-    var screenName = self.screensOrder[self.currentScreenIndex];
-    var curScreenOffset = Math.round(self.curTop-self.screens[screenName]);
-    var xPos = Math.round( self.transformToolManager.target.offsetLeft);
-    var yPos = Math.round( self.transformToolManager.target.offsetTop-self.screens[screenName]);
 
-    var data = "data-_"+screenName+"-"+curScreenOffset+"="+'"top-offset:'+yPos+'px; left: '+xPos+'px; ' + self.transformToolManager.getTargetTransformInfo() + '"';
+    if (self.transformToolManager.target)
+    {
+      var screenName = self.screensOrder[self.currentScreenIndex];
+      var curScreenOffset = Math.round(self.curTop-self.screens[screenName]);
+      var xPos = Math.round( self.transformToolManager.target.offsetLeft);
+      var yPos = Math.round( self.transformToolManager.target.offsetTop-self.screens[screenName]);
 
-    console.log(xPos, yPos, data);
+      var data = "data-_"+screenName+"-"+curScreenOffset+"="+'"top-offset:'+yPos+'px; left: '+xPos+'px; ' + self.transformToolManager.getTargetTransformInfo() + '"';
 
-    self.$(".data").html(data);
+      self.$(".data").html("<input style='width: 800px' type='text' value='" + data + "'>");
+    }
   },
   deselectTarget: function()
   {
